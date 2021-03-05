@@ -705,8 +705,8 @@ class ModelState : public BackendModel {
   BackendConfiguration* backend_config_;
   bool is_graphdef_;
 
-  int num_inter_threads_;
   int num_intra_threads_;
+  int num_inter_threads_;
   bool use_per_session_threads_;
 };
 
@@ -747,7 +747,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model)
+    : BackendModel(triton_model), num_intra_threads_(0), num_inter_threads_(0),
+      use_per_session_threads_(false)
 {
   // Obtain backend configuration
   TRITONBACKEND_Backend* backend;
@@ -1085,13 +1086,14 @@ ModelState::ParseParameters()
 {
   // Validate and set parameters
   triton::common::TritonJson::Value params;
-  bool status = model_config_.Find("parameters", &params);
-  RETURN_IF_ERROR(ParseParameter(
-      "TF_USE_PER_SESSION_THREADS", params, &use_per_session_threads_));
-  RETURN_IF_ERROR(
-      ParseParameter("TF_NUM_INTRA_THREADS", params, &num_intra_threads_));
-  RETURN_IF_ERROR(
-      ParseParameter("TF_NUM_INTER_THREADS", params, &num_inter_threads_));
+  if (model_config_.Find("parameters", &params)) {
+    RETURN_IF_ERROR(
+        ParseParameter("TF_NUM_INTRA_THREADS", params, &num_intra_threads_));
+    RETURN_IF_ERROR(
+        ParseParameter("TF_NUM_INTER_THREADS", params, &num_inter_threads_));
+    RETURN_IF_ERROR(ParseParameter(
+        "TF_USE_PER_SESSION_THREADS", params, &use_per_session_threads_));
+  }
 
   return nullptr;
 }

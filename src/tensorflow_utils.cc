@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "tensorflow_utils.h"
+#include <algorithm>
 
 #include "triton/backend/backend_common.h"
 
@@ -347,10 +348,10 @@ ConvertInt(const std::string& string_val, int* setting)
 {
   *setting = 0;
   for (const auto ch : string_val) {
-    if (!std::isdigit(c)) {
+    if (!std::isdigit(ch)) {
       return false;
     } else {
-      *setting = (*setting * 10) + (c - '0');
+      *setting = (*setting * 10) + (ch - '0');
     }
   }
   return true;
