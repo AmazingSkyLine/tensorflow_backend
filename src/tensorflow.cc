@@ -686,6 +686,9 @@ class ModelState : public BackendModel {
 
   BackendConfiguration* BackendConfig() const { return backend_config_; }
   bool IsGraphdef() const { return is_graphdef_; }
+  int NumIntraThreads() const { return num_intra_threads_; }
+  int NumInterThreads() const { return num_inter_threads_; }
+  int UsePerSessionThreads() const { return use_per_session_threads_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -693,11 +696,18 @@ class ModelState : public BackendModel {
   // Auto-complete the model configuration
   TRITONSERVER_Error* AutoCompleteConfig();
 
+  // Parses the parameters in config
+  TRITONSERVER_Error* ParseParameters();
+
   // Validate that model configuration is supported by this backend.
   TRITONSERVER_Error* ValidateModelConfig();
 
   BackendConfiguration* backend_config_;
   bool is_graphdef_;
+
+  int num_inter_threads_;
+  int num_intra_threads_;
+  bool use_per_session_threads_;
 };
 
 TRITONSERVER_Error*
@@ -731,6 +741,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
   }
 
   RETURN_IF_ERROR((*state)->ValidateModelConfig());
+  RETURN_IF_ERROR((*state)->ParseParameters());
 
   return nullptr;  // success
 }
@@ -997,7 +1008,9 @@ ModelState::AutoCompleteConfig()
     if (exists) {
       err = TRITONTF_ModelCreateFromSavedModel(
           &trtistf_model, Name().c_str(), model_path.c_str(),
-          TRITONTF_NO_GPU_DEVICE, false /* have_graph */, 0 /* graph_level */,
+          TRITONTF_NO_GPU_DEVICE, 0 /* num_intra_threads */,
+          0 /* num_inter_threads */, false /* use_per_session_threads */,
+          false /* have_graph */, 0 /* graph_level */,
           backend_config_->allow_gpu_memory_growth_,
           backend_config_->per_process_gpu_memory_fraction_,
           backend_config_->allow_soft_placement_,
@@ -1065,6 +1078,22 @@ ModelState::ValidateModelConfig()
   }
 
   return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelState::ParseParameters()
+{
+  // Validate and set parameters
+  triton::common::TritonJson::Value params;
+  bool status = model_config_.Find("parameters", &params);
+  RETURN_IF_ERROR(ParseParameter(
+      "TF_USE_PER_SESSION_THREADS", params, &use_per_session_threads_));
+  RETURN_IF_ERROR(
+      ParseParameter("TF_NUM_INTRA_THREADS", params, &num_intra_threads_));
+  RETURN_IF_ERROR(
+      ParseParameter("TF_NUM_INTER_THREADS", params, &num_inter_threads_));
+
+  return nullptr;
 }
 
 //
@@ -1304,7 +1333,8 @@ ModelInstanceState::Create(
   if (model_state->IsGraphdef()) {
     RETURN_IF_TRITONTF_ERROR(TRITONTF_ModelCreateFromGraphDef(
         &model, model_state->Name().c_str(), model_path.c_str(), gpu_device,
-        has_graph_level, graph_level,
+        model_state->NumIntraThreads(), model_state->NumInterThreads(),
+        model_state->UsePerSessionThreads(), has_graph_level, graph_level,
         model_state->BackendConfig()->allow_gpu_memory_growth_,
         model_state->BackendConfig()->per_process_gpu_memory_fraction_,
         model_state->BackendConfig()->allow_soft_placement_,
@@ -1317,7 +1347,8 @@ ModelInstanceState::Create(
   } else {
     RETURN_IF_TRITONTF_ERROR(TRITONTF_ModelCreateFromSavedModel(
         &model, model_state->Name().c_str(), model_path.c_str(), gpu_device,
-        has_graph_level, graph_level,
+        model_state->NumIntraThreads(), model_state->NumInterThreads(),
+        model_state->UsePerSessionThreads(), has_graph_level, graph_level,
         model_state->BackendConfig()->allow_gpu_memory_growth_,
         model_state->BackendConfig()->per_process_gpu_memory_fraction_,
         model_state->BackendConfig()->allow_soft_placement_,
