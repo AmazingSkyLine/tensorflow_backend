@@ -1687,9 +1687,11 @@ ModelInstanceState::ProcessRequests(
   {
     TRITONTF_TensorList* rtl = nullptr;
 
+    LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, std::string("TRITONTF_ModelRun start"));
     TRITONTF_Error* tf_err = TRITONTF_ModelRun(
         trtistf_model_.get(), *(input_tensors.release()),
         required_outputs.size(), output_names_cstr, &rtl);
+    LOG_MESSAGE(TRITONSERVER_LOG_VERBOSE, std::string("TRITONTF_ModelRun end"));
     if (tf_err != nullptr) {
       auto err =
           TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, tf_err->msg_);
